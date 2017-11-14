@@ -17,6 +17,8 @@ import com.github.dockerjava.api.command.TopContainerResponse;
 import com.github.dockerjava.api.exception.ConflictException;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.exception.NotModifiedException;
+import com.github.dockerjava.api.model.AuthConfig;
+import com.github.dockerjava.api.model.AuthConfigurations;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.ChangeLog;
@@ -488,6 +490,10 @@ public class DockerClientExecutor {
                 createContainerCmd.withIpv6Address(containerConfiguration.getIpv6Address());
             }
 
+            if (containerConfiguration.getAliases() != null) {
+                createContainerCmd.withAliases(containerConfiguration.getAliases().toArray(new String[0]));
+            }
+
             boolean alwaysPull = false;
 
             if (containerConfiguration.getAlwaysPull() != null) {
@@ -781,6 +787,16 @@ public class DockerClientExecutor {
 
         if (params.containsKey(DOCKERFILE_NAME)) {
             buildImageCmd.withDockerfile(new File((String) params.get(DOCKERFILE_NAME)));
+        }
+        
+        if(this.dockerClientConfig.getRegistryUsername() != null && this.dockerClientConfig.getRegistryPassword() != null){
+            AuthConfig buildAuthConfig = new AuthConfig().withUsername(this.dockerClientConfig.getRegistryUsername())
+                    .withPassword(this.dockerClientConfig.getRegistryPassword())
+                    .withEmail(this.dockerClientConfig.getRegistryEmail())
+                    .withRegistryAddress(this.dockerClientConfig.getRegistryUrl());
+            final AuthConfigurations authConfigurations = new AuthConfigurations();
+            authConfigurations.addConfig(buildAuthConfig);
+            buildImageCmd.withBuildAuthConfigs(authConfigurations);
         }
     }
 

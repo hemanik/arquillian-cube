@@ -15,7 +15,7 @@
  */
 package org.arquillian.cube.kubernetes.impl;
 
-import io.fabric8.kubernetes.api.builder.v2_2.Visitor;
+import io.fabric8.kubernetes.api.builder.v2_6.Visitor;
 import org.arquillian.cube.impl.client.enricher.StandaloneCubeUrlResourceProvider;
 import org.arquillian.cube.impl.util.Strings;
 import org.arquillian.cube.kubernetes.api.AnnotationProvider;
@@ -79,6 +79,7 @@ public class KubernetesExtension implements LoadableExtension {
             .observer(FeedbackProviderServiceRegistar.class)
             .observer(getClientCreator())
             .observer(SuiteListener.class)
+            .observer(ClassListener.class)
             .observer(TestListener.class)
             .observer(SessionManagerLifecycle.class);
 

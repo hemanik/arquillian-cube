@@ -1,14 +1,24 @@
 package org.arquillian.cube.kubernetes.impl;
 
-import io.fabric8.kubernetes.clnt.v2_2.Config;
-import io.fabric8.kubernetes.clnt.v2_2.ConfigBuilder;
-import io.fabric8.kubernetes.clnt.v2_2.utils.Utils;
+import io.fabric8.kubernetes.clnt.v2_6.ConfigBuilder;
+import io.fabric8.kubernetes.clnt.v2_6.utils.Utils;
 import io.sundr.builder.annotations.Buildable;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.arquillian.cube.impl.util.Strings;
 import org.arquillian.cube.impl.util.SystemEnvironmentVariables;
 import org.arquillian.cube.kubernetes.api.Configuration;
@@ -19,8 +29,11 @@ import static org.arquillian.cube.impl.util.ConfigUtil.getBooleanProperty;
 import static org.arquillian.cube.impl.util.ConfigUtil.getLongProperty;
 import static org.arquillian.cube.impl.util.ConfigUtil.getStringProperty;
 
-@Buildable(builderPackage = "io.fabric8.kubernetes.api.builder.v2_2", generateBuilderPackage = false, editableEnabled = false)
+@Buildable(builderPackage = "io.fabric8.kubernetes.api.builder.v2_6", generateBuilderPackage = false, editableEnabled = false)
 public class DefaultConfiguration implements Configuration {
+
+    private static final String ENV_VAR_REGEX = "env.([a-zA-Z0-9_]+)";
+    private static final Pattern ENV_VAR_PATTERN = Pattern.compile(ENV_VAR_REGEX);
 
     public static final String ROOT = "/";
 
@@ -28,11 +41,11 @@ public class DefaultConfiguration implements Configuration {
     private final String namespace;
     private final URL masterUrl;
 
+    private final Map<String, String> scriptEnvironmentVariables;
     private final URL environmentSetupScriptUrl;
     private final URL environmentTeardownScriptUrl;
 
     private final URL environmentConfigUrl;
-    private final List<URL> environmentConfigAdditionalUrls;
     private final List<URL> environmentDependencies;
 
     private final boolean namespaceLazyCreateEnabled;
@@ -50,22 +63,24 @@ public class DefaultConfiguration implements Configuration {
 
     private final boolean ansiLoggerEnabled;
     private final boolean environmentInitEnabled;
+    private final boolean logCopyEnabled;
+    private final String logPath;
     private final String kubernetesDomain;
     private final String dockerRegistry;
 
-    public DefaultConfiguration(String sessionId, URL masterUrl, String namespace, URL environmentSetupScriptUrl,
-        URL environmentTeardownScriptUrl, URL environmentConfigUrl, List<URL> environmentConfigAdditionalUrls, List<URL> environmentDependencies,
+    public DefaultConfiguration(String sessionId, URL masterUrl, String namespace, Map<String, String> scriptEnvironmentVariables,  URL environmentSetupScriptUrl,
+        URL environmentTeardownScriptUrl, URL environmentConfigUrl, List<URL> environmentDependencies,
         boolean namespaceLazyCreateEnabled, boolean namespaceCleanupEnabled, long namespaceCleanupTimeout,
         boolean namespaceCleanupConfirmationEnabled, boolean namespaceDestroyEnabled,
         boolean namespaceDestroyConfirmationEnabled, long namespaceDestroyTimeout, long waitTimeout,
-        long waitPollInterval, List<String> waitForServiceList, boolean ansiLoggerEnabled, boolean environmentInitEnabled,
-        String kubernetesDomain, String dockerRegistry) {
+        long waitPollInterval, List<String> waitForServiceList, boolean ansiLoggerEnabled, boolean environmentInitEnabled, boolean logCopyEnabled,
+        String logPath, String kubernetesDomain, String dockerRegistry) {
         this.masterUrl = masterUrl;
+        this.scriptEnvironmentVariables = scriptEnvironmentVariables;
         this.environmentSetupScriptUrl = environmentSetupScriptUrl;
         this.environmentTeardownScriptUrl = environmentTeardownScriptUrl;
         this.environmentDependencies = environmentDependencies;
         this.environmentConfigUrl = environmentConfigUrl;
-        this.environmentConfigAdditionalUrls = environmentConfigAdditionalUrls;
         this.sessionId = sessionId;
         this.namespace = namespace;
         this.namespaceLazyCreateEnabled = namespaceLazyCreateEnabled;
@@ -80,26 +95,25 @@ public class DefaultConfiguration implements Configuration {
         this.waitForServiceList = waitForServiceList;
         this.ansiLoggerEnabled = ansiLoggerEnabled;
         this.environmentInitEnabled = environmentInitEnabled;
+        this.logCopyEnabled = logCopyEnabled;
+        this.logPath = logPath;
         this.kubernetesDomain = kubernetesDomain;
         this.dockerRegistry = dockerRegistry;
     }
 
     public static DefaultConfiguration fromMap(Map<String, String> map) {
         try {
-            String sessionId = UUID.randomUUID().toString();
+            String sessionId = UUID.randomUUID().toString().split("-")[0];
             String namespace = getBooleanProperty(NAMESPACE_USE_CURRENT, map, false)
                 ? new ConfigBuilder().build().getNamespace()
                 : getStringProperty(NAMESPACE_TO_USE, map, null);
 
             //When a namespace is provided we want to cleanup our stuff...
             // ... without destroying pre-existing stuff.
-            Boolean shouldCleanupNamespace = true;
             Boolean shouldDestroyNamespace = false;
             if (Strings.isNullOrEmpty(namespace)) {
-                //When we generate a namespace ourselves we to completely destroy it, so cleaning makes no sense.
                 namespace = getStringProperty(NAMESPACE_PREFIX, map, "itest") + "-" + sessionId;
                 shouldDestroyNamespace = true;
-                shouldCleanupNamespace = false;
             }
             return new DefaultConfigurationBuilder()
                 .withSessionId(sessionId)
@@ -107,16 +121,19 @@ public class DefaultConfiguration implements Configuration {
                 .withMasterUrl(
                     new URL(getStringProperty(MASTER_URL, KUBERNETES_MASTER, map, FALLBACK_CLIENT_CONFIG.getMasterUrl())))
                 .withEnvironmentInitEnabled(getBooleanProperty(ENVIRONMENT_INIT_ENABLED, map, true))
+                .withLogCopyEnabled(getBooleanProperty(LOGS_COPY, map, false))
+                .withLogPath(getStringProperty(LOGS_PATH, map, null))
+                .withScriptEnvironmentVariables(parseMap(map.get(ENVIRONMENT_SCRIPT_ENV)))
                 .withEnvironmentSetupScriptUrl(
                     asUrlOrResource(getStringProperty(ENVIRONMENT_SETUP_SCRIPT_URL, map, null)))
                 .withEnvironmentTeardownScriptUrl(
                     asUrlOrResource(getStringProperty(ENVIRONMENT_TEARDOWN_SCRIPT_URL, map, null)))
-                .withEnvironmentConfigUrl(getKubernetesConfigurationUrl(map, DEFAULT_CONFIG_FILE_NAME))
+                .withEnvironmentConfigUrl(getKubernetesConfigurationUrl(map))
                 .withEnvironmentDependencies(
                     asURL(Strings.splitAndTrimAsList(getStringProperty(ENVIRONMENT_DEPENDENCIES, map, ""), "\\s+")))
                 .withNamespaceLazyCreateEnabled(
                     getBooleanProperty(NAMESPACE_LAZY_CREATE_ENABLED, map, DEFAULT_NAMESPACE_LAZY_CREATE_ENABLED))
-                .withNamespaceCleanupEnabled(getBooleanProperty(NAMESPACE_CLEANUP_ENABLED, map, shouldCleanupNamespace))
+                .withNamespaceCleanupEnabled(getBooleanProperty(NAMESPACE_CLEANUP_ENABLED, map, true))
                 .withNamespaceCleanupConfirmationEnabled(
                     getBooleanProperty(NAMESPACE_CLEANUP_CONFIRM_ENABLED, map, false))
                 .withNamespaceCleanupTimeout(
@@ -146,10 +163,6 @@ public class DefaultConfiguration implements Configuration {
     }
 
     public static String getDockerRegistry(Map<String, String> map) throws MalformedURLException {
-        if (map.containsKey(DOCKER_REGISTY)) {
-            return map.get(DOCKER_REGISTY);
-        }
-
         String registry = SystemEnvironmentVariables.getEnvironmentOrPropertyVariable(DOCKER_REGISTY);
         if (Strings.isNotNullOrEmpty(registry)) {
             return registry;
@@ -159,9 +172,13 @@ public class DefaultConfiguration implements Configuration {
         String registryPort = SystemEnvironmentVariables.getEnvironmentVariable(DOCKER_REGISTRY_PORT);
         if (Strings.isNotNullOrEmpty(registry) && Strings.isNotNullOrEmpty(registryPort)) {
             return String.format(DOCKER_REGISTRY_FORMAT, registryHost, registryPort);
-        } else {
-            return null;
         }
+
+        if (map.containsKey(DOCKER_REGISTY)) {
+            return map.get(DOCKER_REGISTY);
+        }
+
+        return null;
     }
 
     /**
@@ -170,21 +187,20 @@ public class DefaultConfiguration implements Configuration {
      * @param map
      *     The arquillian configuration.
      */
-    public static URL getKubernetesConfigurationUrl(Map<String, String> map, String defaultFileName) throws MalformedURLException {
-        if (map.containsKey(ENVIRONMENT_CONFIG_URL)) {
+    public static URL getKubernetesConfigurationUrl(Map<String, String> map) throws MalformedURLException {
+        if (Strings.isNotNullOrEmpty(Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_URL, ""))) {
+            return new URL(Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_URL, ""));
+        } else if (Strings.isNotNullOrEmpty(Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_RESOURCE_NAME, ""))) {
+            String resourceName = Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_RESOURCE_NAME, "");
+            return findConfigResource(resourceName);
+        } else if (map.containsKey(ENVIRONMENT_CONFIG_URL)) {
             return new URL(map.get(ENVIRONMENT_CONFIG_URL));
         } else if (map.containsKey(ENVIRONMENT_CONFIG_RESOURCE_NAME)) {
             String resourceName = map.get(ENVIRONMENT_CONFIG_RESOURCE_NAME);
             return findConfigResource(resourceName);
-        } else if (Strings.isNotNullOrEmpty(Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_URL, ""))) {
-            return new URL(Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_URL, ""));
         } else {
-            String defaultValue = ROOT + defaultFileName;
-            String resourceName = Utils.getSystemPropertyOrEnvVar(ENVIRONMENT_CONFIG_RESOURCE_NAME, defaultValue);
-            URL answer = findConfigResource(resourceName);
-            if (answer == null) {
-            }
-            return answer;
+            // Let the resource locator find the resource
+            return null;
         }
     }
 
@@ -244,6 +260,22 @@ public class DefaultConfiguration implements Configuration {
         }
     }
 
+    public static Map<String, String> parseMap(String s) throws IOException {
+        if (Strings.isNullOrEmpty(s)) {
+            return Collections.EMPTY_MAP;
+        }
+
+        Properties properties = new Properties();
+        try (InputStream is = new ByteArrayInputStream(s.getBytes(Charset.defaultCharset()))) {
+            properties.load(is);
+        }
+        Map<String, String> map = new HashMap<>();
+        for (String key : properties.stringPropertyNames()) {
+            map.put(key, properties.getProperty(key));
+        }
+        return map;
+    }
+
     @Override
     public String getSessionId() {
         return sessionId;
@@ -259,6 +291,11 @@ public class DefaultConfiguration implements Configuration {
         return masterUrl;
     }
 
+    @Override
+    public Map<String, String> getScriptEnvironmentVariables() {
+        return scriptEnvironmentVariables;
+    }
+
     public URL getEnvironmentSetupScriptUrl() {
         return environmentSetupScriptUrl;
     }
@@ -271,11 +308,6 @@ public class DefaultConfiguration implements Configuration {
     @Override
     public URL getEnvironmentConfigUrl() {
         return environmentConfigUrl;
-    }
-
-    @Override
-    public List<URL> getEnvironmentConfigAdditionalUrls() {
-        return environmentConfigAdditionalUrls;
     }
 
     @Override
@@ -341,6 +373,16 @@ public class DefaultConfiguration implements Configuration {
     @Override
     public boolean isEnvironmentInitEnabled() {
         return environmentInitEnabled;
+    }
+
+    @Override
+    public boolean isLogCopyEnabled() {
+        return logCopyEnabled;
+    }
+
+    @Override
+    public String getLogPath() {
+        return logPath;
     }
 
     @Override

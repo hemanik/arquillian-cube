@@ -1,7 +1,7 @@
 package org.arquillian.cube.openshift.impl.model;
 
-import io.fabric8.kubernetes.api.model.v2_2.Service;
-import io.fabric8.kubernetes.api.model.v2_2.ServicePort;
+import io.fabric8.kubernetes.api.model.v2_6.Service;
+import io.fabric8.kubernetes.api.model.v2_6.ServicePort;
 import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashMap;
@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 
 import org.arquillian.cube.openshift.impl.client.CubeOpenShiftConfiguration;
 import org.arquillian.cube.openshift.impl.client.OpenShiftClient;
+import org.arquillian.cube.openshift.impl.dns.ArqCubeNameService;
 import org.arquillian.cube.spi.BaseCube;
 import org.arquillian.cube.spi.Binding;
 import org.arquillian.cube.spi.CubeControlException;

@@ -1,11 +1,11 @@
 package org.arquillian.cube.openshift.impl.namespace;
 
-import io.fabric8.kubernetes.api.model.v2_2.Namespace;
-import io.fabric8.kubernetes.clnt.v2_2.KubernetesClient;
-import io.fabric8.kubernetes.clnt.v2_2.KubernetesClientException;
-import io.fabric8.openshift.api.model.v2_2.ProjectRequest;
-import io.fabric8.openshift.api.model.v2_2.ProjectRequestBuilder;
-import io.fabric8.openshift.clnt.v2_2.OpenShiftClient;
+import io.fabric8.kubernetes.api.model.v2_6.Namespace;
+import io.fabric8.kubernetes.clnt.v2_6.KubernetesClient;
+import io.fabric8.kubernetes.clnt.v2_6.KubernetesClientException;
+import io.fabric8.openshift.api.model.v2_6.ProjectRequest;
+import io.fabric8.openshift.api.model.v2_6.ProjectRequestBuilder;
+import io.fabric8.openshift.clnt.v2_6.OpenShiftClient;
 
 import java.util.Collections;
 import java.util.Map;
@@ -113,12 +113,20 @@ public class OpenshiftNamespaceService extends DefaultNamespaceService {
         public Namespace annotate(String namespace, Map<String, String> annotations) {
             if (client.isAdaptable(OpenShiftClient.class)) {
                 OpenShiftClient openShiftClient = client.adapt(OpenShiftClient.class);
+
+                /* FIXME: Openshift currently doesn't support annotations
+                 * See: https://github.com/openshift/origin/issues/3819
+                 * And: https://github.com/openshift/origin/issues/10315
+                 *
+                 * https://github.com/arquillian/arquillian-cube/issues/740
+
                 openShiftClient.projects().withName(namespace)
                     .edit()
                     .editMetadata()
                     .addToAnnotations(annotations)
                     .endMetadata()
                     .done();
+                */
 
                 return openShiftClient.namespaces().withName(namespace).get();
             } else {

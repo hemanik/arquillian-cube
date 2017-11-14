@@ -1,9 +1,10 @@
 package org.arquillian.cube.kubernetes.api;
 
-import io.fabric8.kubernetes.clnt.v2_2.Config;
-import io.fabric8.kubernetes.clnt.v2_2.ConfigBuilder;
+import io.fabric8.kubernetes.clnt.v2_6.Config;
+import io.fabric8.kubernetes.clnt.v2_6.ConfigBuilder;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
 
 public interface Configuration {
 
@@ -36,6 +37,7 @@ public interface Configuration {
 
     String ENVIRONMENT_INIT_ENABLED = "env.init.enabled";
 
+    String ENVIRONMENT_SCRIPT_ENV = "env.script.env";
     String ENVIRONMENT_SETUP_SCRIPT_URL = "env.setup.script.url";
     String ENVIRONMENT_TEARDOWN_SCRIPT_URL = "env.teardown.script.url";
     String ENVIRONMENT_CONFIG_URL = "env.config.url";
@@ -48,6 +50,8 @@ public interface Configuration {
     String WAIT_FOR_SERVICE_LIST = "wait.for.service.list";
 
     String ANSI_LOGGER_ENABLED = "ansi.logger.enabled";
+    String LOGS_COPY = "logs.copy";
+    String LOGS_PATH = "logs.path";
 
     Long DEFAULT_WAIT_TIMEOUT = 5 * 60 * 1000L;
     Long DEFAULT_WAIT_POLL_INTERVAL = 5 * 1000L;
@@ -61,13 +65,13 @@ public interface Configuration {
 
     URL getMasterUrl();
 
+    Map<String, String> getScriptEnvironmentVariables();
+
     URL getEnvironmentSetupScriptUrl();
 
     URL getEnvironmentTeardownScriptUrl();
 
     URL getEnvironmentConfigUrl();
-
-    List<URL> getEnvironmentConfigAdditionalUrls();
 
     List<URL> getEnvironmentDependencies();
 
@@ -98,6 +102,10 @@ public interface Configuration {
     boolean isAnsiLoggerEnabled();
 
     boolean isEnvironmentInitEnabled();
+
+    boolean isLogCopyEnabled();
+
+    String getLogPath();
 
     String getKubernetesDomain();
 

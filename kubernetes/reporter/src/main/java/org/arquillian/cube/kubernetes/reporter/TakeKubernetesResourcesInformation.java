@@ -1,6 +1,6 @@
 package org.arquillian.cube.kubernetes.reporter;
 
-import io.fabric8.kubernetes.clnt.v2_2.KubernetesClient;
+import io.fabric8.kubernetes.clnt.v2_6.KubernetesClient;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.arquillian.cube.kubernetes.api.Configuration;
 import org.arquillian.cube.kubernetes.api.DependencyResolver;
+import org.arquillian.cube.kubernetes.api.KubernetesResourceLocator;
 import org.arquillian.cube.kubernetes.api.Session;
 import org.arquillian.cube.kubernetes.impl.event.AfterStart;
 import org.arquillian.cube.kubernetes.impl.event.Start;
@@ -35,6 +36,9 @@ public class TakeKubernetesResourcesInformation {
 
     @Inject
     Instance<DependencyResolver> dependencyResolver;
+
+    @Inject
+    Instance<KubernetesResourceLocator> resourceLocator;
 
     public void reportKubernetesConfiguration(@Observes Start start, Configuration configuration,
         org.arquillian.reporter.config.ReporterConfiguration reporterConfiguration) throws IOException {
@@ -124,6 +128,13 @@ public class TakeKubernetesResourcesInformation {
         org.arquillian.reporter.config.ReporterConfiguration reporterConfiguration) throws IOException {
         final List<FileEntry> fileEntries = new ArrayList<>();
         URL environmentConfigUrl = configuration.getEnvironmentConfigUrl();
+
+        if (environmentConfigUrl == null) {
+            KubernetesResourceLocator kubernetesResourceLocator = resourceLocator.get();
+            if (kubernetesResourceLocator != null) {
+                environmentConfigUrl = kubernetesResourceLocator.locate();
+            }
+        }
 
         if (environmentConfigUrl != null) {
             fileEntries.add(getFileForResourcesConfiguration(environmentConfigUrl, reporterConfiguration));

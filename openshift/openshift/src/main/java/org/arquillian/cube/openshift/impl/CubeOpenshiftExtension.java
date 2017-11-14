@@ -12,10 +12,11 @@ import org.arquillian.cube.kubernetes.impl.feedback.DefaultFeedbackProvider;
 import org.arquillian.cube.kubernetes.impl.install.DefaultResourceInstaller;
 import org.arquillian.cube.kubernetes.impl.locator.DefaultKubernetesResourceLocator;
 import org.arquillian.cube.kubernetes.impl.namespace.DefaultNamespaceService;
+import org.arquillian.cube.openshift.impl.client.CubeOpenShiftConfigurationFactory;
 import org.arquillian.cube.openshift.impl.client.CubeOpenShiftRegistrar;
-import org.arquillian.cube.openshift.impl.client.CubeOpenshiftConfigurationFactory;
 import org.arquillian.cube.openshift.impl.client.OpenShiftClientCreator;
 import org.arquillian.cube.openshift.impl.client.OpenShiftSuiteLifecycleController;
+import org.arquillian.cube.openshift.impl.enricher.RouteURLEnricher;
 import org.arquillian.cube.openshift.impl.enricher.internal.DeploymentConfigListResourceProvider;
 import org.arquillian.cube.openshift.impl.enricher.internal.DeploymentConfigResourceProvider;
 import org.arquillian.cube.openshift.impl.enricher.internal.OpenshiftClientResourceProvider;
@@ -24,6 +25,7 @@ import org.arquillian.cube.openshift.impl.install.OpenshiftResourceInstaller;
 import org.arquillian.cube.openshift.impl.locator.OpenshiftKubernetesResourceLocator;
 import org.arquillian.cube.openshift.impl.namespace.OpenshiftNamespaceService;
 import org.jboss.arquillian.core.spi.LoadableExtension;
+import org.jboss.arquillian.test.spi.TestEnricher;
 import org.jboss.arquillian.test.spi.enricher.resource.ResourceProvider;
 
 public class CubeOpenshiftExtension implements LoadableExtension {
@@ -44,9 +46,10 @@ public class CubeOpenshiftExtension implements LoadableExtension {
             .service(ResourceProvider.class, org.arquillian.cube.openshift.impl.enricher.external.DeploymentConfigResourceProvider.class)
             .service(ResourceProvider.class, org.arquillian.cube.openshift.impl.enricher.external.DeploymentConfigListResourceProvider.class)
 
+            .service(TestEnricher.class, RouteURLEnricher.class)
 
             .override(ConfigurationFactory.class, DefaultConfigurationFactory.class,
-                CubeOpenshiftConfigurationFactory.class)
+                CubeOpenShiftConfigurationFactory.class)
             .override(ResourceProvider.class, StandaloneCubeUrlResourceProvider.class,
                 KuberntesServiceUrlResourceProvider.class)
             .override(ResourceInstaller.class, DefaultResourceInstaller.class, OpenshiftResourceInstaller.class)

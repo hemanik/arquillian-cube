@@ -1,8 +1,8 @@
 package org.arquillian.cube.openshift.impl.model;
 
-import io.fabric8.kubernetes.api.model.v2_2.Container;
-import io.fabric8.kubernetes.api.model.v2_2.ContainerPort;
-import io.fabric8.kubernetes.api.model.v2_2.Pod;
+import io.fabric8.kubernetes.api.model.v2_6.Container;
+import io.fabric8.kubernetes.api.model.v2_6.ContainerPort;
+import io.fabric8.kubernetes.api.model.v2_6.Pod;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.UnknownHostException;
@@ -21,6 +21,7 @@ import org.arquillian.cube.openshift.impl.client.CubeOpenShiftConfiguration;
 import org.arquillian.cube.openshift.impl.client.OpenShiftClient;
 import org.arquillian.cube.openshift.impl.client.OpenShiftClient.ResourceHolder;
 import org.arquillian.cube.openshift.impl.client.metadata.CopyFromContainer;
+import org.arquillian.cube.openshift.impl.dns.ArqCubeNameService;
 import org.arquillian.cube.spi.BaseCube;
 import org.arquillian.cube.spi.Binding;
 import org.arquillian.cube.spi.Cube;
@@ -118,6 +119,9 @@ public class BuildablePodCube extends BaseCube<Void> {
                 throw e;
             }
             lifecycle.fire(new AfterStart(id));
+
+            // Add the routes to JVM's name service.
+            ArqCubeNameService.setRoutes(client.getClientExt().routes().list(), this.configuration.getRouterHost());
         } catch (Exception e) {
             this.state = State.START_FAILED;
             throw CubeControlException.failedStart(getId(), e);

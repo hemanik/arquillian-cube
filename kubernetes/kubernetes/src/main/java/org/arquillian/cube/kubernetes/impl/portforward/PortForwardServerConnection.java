@@ -1,5 +1,18 @@
 package org.arquillian.cube.kubernetes.impl.portforward;
 
+import java.io.IOException;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.CountDownLatch;
+
+import org.xnio.ChainedChannelListener;
+import org.xnio.ChannelListener;
+import org.xnio.IoUtils;
+import org.xnio.OptionMap;
+import org.xnio.StreamConnection;
+import org.xnio.channels.CloseableChannel;
+import org.xnio.conduits.StreamSinkConduit;
+
 import io.undertow.UndertowMessages;
 import io.undertow.client.ClientCallback;
 import io.undertow.client.ClientConnection;
@@ -14,17 +27,6 @@ import io.undertow.server.SSLSessionInfo;
 import io.undertow.util.HttpString;
 import io.undertow.util.Methods;
 import io.undertow.util.StringReadChannelListener;
-import java.io.IOException;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.CountDownLatch;
-import org.xnio.ChainedChannelListener;
-import org.xnio.ChannelListener;
-import org.xnio.IoUtils;
-import org.xnio.OptionMap;
-import org.xnio.StreamConnection;
-import org.xnio.channels.CloseableChannel;
-import org.xnio.conduits.StreamSinkConduit;
 
 /**
  * PortForwardServerConnection
@@ -40,7 +42,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
      * Create a new PortForwardServerConnection.
      */
     public PortForwardServerConnection(StreamConnection channel, ByteBufferPool bufferPool, OptionMap undertowOptions,
-        int bufferSize) {
+                                       int bufferSize) {
         super(channel, bufferPool, null, undertowOptions, bufferSize);
     }
 
@@ -105,7 +107,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
     }
 
     public void startForwarding(final ClientConnection clientConnection, final String urlPath, final int targetPort,
-        final int requestId) throws IOException {
+                                final int requestId) throws IOException {
         try {
             // initiate the streams
             openErrorStream(clientConnection, urlPath, targetPort, requestId);
@@ -116,7 +118,9 @@ public class PortForwardServerConnection extends AbstractServerConnection {
                  * client is done and the request stream closes.
                  */
                 requestComplete.await();
-                /* wait for the response on the error stream. */
+                /* wait for the response on the error stream.
+                *  Mont of times the connection hangs here,
+                * */
                 errorComplete.await();
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -129,7 +133,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
     }
 
     private void openErrorStream(final ClientConnection clientConnection, final String urlPath, final int targetPort,
-        final int requestId) throws IOException {
+                                 final int requestId) throws IOException {
         ClientRequest request = new ClientRequest()
             .setMethod(Methods.POST)
             .setPath(urlPath);
@@ -144,6 +148,8 @@ public class PortForwardServerConnection extends AbstractServerConnection {
             public void failed(IOException e) {
                 holder[0] = e;
                 latch.countDown();
+                errorComplete.countDown();
+                requestComplete.countDown();
             }
 
             @Override
@@ -185,7 +191,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
     }
 
     private void openDataStream(final ClientConnection clientConnection, final String urlPath, final int targetPort,
-        final int requestId) throws IOException {
+                                final int requestId) throws IOException {
         ClientRequest request = new ClientRequest()
             .setMethod(Methods.POST)
             .setPath(urlPath);
@@ -200,13 +206,16 @@ public class PortForwardServerConnection extends AbstractServerConnection {
         getChannel().getCloseSetter()
             .set(new ChainedChannelListener<CloseableChannel>(
                 new CancelTimerChannelListener(timer),
-                new LatchReleaseChannelListener(requestComplete)));
+                new LatchReleaseChannelListener(requestComplete),
+                new LatchReleaseChannelListener(errorComplete)));
 
         clientConnection.sendRequest(request, new ClientCallback<ClientExchange>() {
             @Override
             public void failed(IOException e) {
                 holder[0] = e;
                 latch.countDown();
+                errorComplete.countDown();
+                requestComplete.countDown();
             }
 
             @Override
@@ -218,7 +227,10 @@ public class PortForwardServerConnection extends AbstractServerConnection {
                     public void completed(final ClientExchange result) {
                         result.getResponseChannel()
                             .getCloseSetter()
-                            .set(new LatchReleaseChannelListener(requestComplete));
+                            .set(new ChainedChannelListener<CloseableChannel>(
+                                    new CancelTimerChannelListener(timer),
+                                    new LatchReleaseChannelListener(requestComplete),
+                                    new LatchReleaseChannelListener(errorComplete)));
                         getIoThread().execute(new Runnable() {
                             @Override
                             public void run() {
@@ -235,6 +247,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
                     @Override
                     public void failed(IOException e) {
                         requestComplete.countDown();
+                        errorComplete.countDown();
                     }
                 });
 
@@ -254,6 +267,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
                     requestComplete.await();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
+                    errorComplete.countDown();
                 }
             }
         });
@@ -272,6 +286,7 @@ public class PortForwardServerConnection extends AbstractServerConnection {
             System.err.println("Port forwarding error: " + error);
         }
         errorComplete.countDown();
+        requestComplete.countDown();
     }
 
     private static final class CancelTimerChannelListener implements ChannelListener<CloseableChannel> {

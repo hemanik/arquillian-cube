@@ -1,13 +1,13 @@
 package org.arquillian.cube.kubernetes.impl.enricher;
 
-import io.fabric8.kubernetes.api.model.v2_2.EndpointAddress;
-import io.fabric8.kubernetes.api.model.v2_2.EndpointSubset;
-import io.fabric8.kubernetes.api.model.v2_2.Endpoints;
-import io.fabric8.kubernetes.api.model.v2_2.Pod;
-import io.fabric8.kubernetes.api.model.v2_2.Service;
-import io.fabric8.kubernetes.api.model.v2_2.ServicePort;
-import io.fabric8.kubernetes.clnt.v2_2.ConfigBuilder;
-import io.fabric8.kubernetes.clnt.v2_2.KubernetesClient;
+import io.fabric8.kubernetes.api.model.v2_6.EndpointAddress;
+import io.fabric8.kubernetes.api.model.v2_6.EndpointSubset;
+import io.fabric8.kubernetes.api.model.v2_6.Endpoints;
+import io.fabric8.kubernetes.api.model.v2_6.Pod;
+import io.fabric8.kubernetes.api.model.v2_6.Service;
+import io.fabric8.kubernetes.api.model.v2_6.ServicePort;
+import io.fabric8.kubernetes.clnt.v2_6.ConfigBuilder;
+import io.fabric8.kubernetes.clnt.v2_6.KubernetesClient;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.net.MalformedURLException;
@@ -21,6 +21,7 @@ import org.arquillian.cube.impl.util.Strings;
 import org.arquillian.cube.kubernetes.annotations.Port;
 import org.arquillian.cube.kubernetes.annotations.PortForward;
 import org.arquillian.cube.kubernetes.annotations.Scheme;
+import org.arquillian.cube.kubernetes.annotations.UseDns;
 import org.arquillian.cube.kubernetes.api.Session;
 import org.arquillian.cube.kubernetes.api.SessionListener;
 import org.arquillian.cube.kubernetes.impl.portforward.PortForwarder;
@@ -31,7 +32,7 @@ import org.jboss.arquillian.test.api.ArquillianResource;
 import org.jboss.arquillian.test.spi.enricher.resource.ResourceProvider;
 
 /**
- * A {@link ResourceProvider} for {@link io.fabric8.kubernetes.api.model.v2_2.ServiceList}.
+ * A {@link ResourceProvider} for {@link io.fabric8.kubernetes.api.model.v2_6.ServiceList}.
  * It refers to services that have been created during the current session.
  */
 public class KuberntesServiceUrlResourceProvider extends AbstractKubernetesResourceProvider {
@@ -44,6 +45,8 @@ public class KuberntesServiceUrlResourceProvider extends AbstractKubernetesResou
 
     private static final String POD = "Pod";
     private static final String LOCALHOST = "127.0.0.1";
+
+    private static final String SERVICE_A_RECORD_FORMAT = "%s.%s.svc.cluster.local";
 
     private static final Random RANDOM = new Random();
 
@@ -66,6 +69,20 @@ public class KuberntesServiceUrlResourceProvider extends AbstractKubernetesResou
         }
         return false;
     }
+
+    /**
+     * @param qualifiers The qualifiers
+     * @return true if qualifiers contain the `UseDns` qualifier.
+     */
+    private static boolean isUseDnsEnabled(Annotation... qualifiers) {
+        for (Annotation q : qualifiers) {
+            if (q instanceof UseDns) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     /**
      * Returns the {@link ServicePort} of the {@link Service} that matches the qualifiers
@@ -281,6 +298,10 @@ public class KuberntesServiceUrlResourceProvider extends AbstractKubernetesResou
             int containerPort = getContainerPort(service, qualifiers);
             port = portForward(getSession(), pod.getMetadata().getName(), containerPort);
             ip = LOCALHOST;
+        } else if (isUseDnsEnabled(qualifiers)) {
+          ip = String.format(SERVICE_A_RECORD_FORMAT, name, namespace);
+          port = getPort(service, qualifiers);
+
         } else {
             port = getPort(service, qualifiers);
         }

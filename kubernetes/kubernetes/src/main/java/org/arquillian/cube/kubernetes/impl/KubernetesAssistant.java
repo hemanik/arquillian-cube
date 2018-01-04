@@ -48,16 +48,20 @@ import static org.awaitility.Awaitility.await;
 public class KubernetesAssistant {
 
     private static final Logger log = Logger.getLogger(KubernetesAssistant.class.getName());
-    private final io.fabric8.kubernetes.clnt.v3_1.KubernetesClient client;
+    private io.fabric8.kubernetes.clnt.v3_1.KubernetesClient client;
 
-    private final String namespace;
+    private String namespace;
     private String applicationName;
 
     private KubernetesAssistantDefaultResourceLocator kubernetesAssistantDefaultResourcesLocator;
 
     private Map<String, List<HasMetadata>> created = new LinkedHashMap<>();
 
-    public KubernetesAssistant(io.fabric8.kubernetes.clnt.v3_1.KubernetesClient kubernetesClient, String namespace) {
+    public KubernetesAssistant(io.fabric8.kubernetes.clnt.v3_1.KubernetesClient kubernetesClient, String namespace) throws NoSuchMethodException {
+
+        if(kubernetesClient.getClass().getName().equals("io.fabric8.openshift.clnt.v3_1.DefaultOpenShiftClient")) {
+            kubernetesClient.getClass().getConstructor();
+        }
         this.client = kubernetesClient;
         this.namespace = namespace;
         this.kubernetesAssistantDefaultResourcesLocator = new KubernetesAssistantDefaultResourceLocator();
@@ -219,7 +223,7 @@ public class KubernetesAssistant {
         }
     }
 
-    private void deploy(InputStream inputStream) throws IOException {
+    public void deploy(InputStream inputStream) throws IOException {
         final List<? extends HasMetadata> entities = deploy("application", inputStream);
 
         if (this.applicationName == null) {
@@ -233,7 +237,7 @@ public class KubernetesAssistant {
         }
     }
 
-    private List<? extends HasMetadata> deploy(String name, InputStream element) throws IOException {
+    public List<? extends HasMetadata> deploy(String name, InputStream element) throws IOException {
         NamespaceListVisitFromServerGetDeleteRecreateWaitApplicable<HasMetadata, Boolean> declarations = client.load(element);
         List<HasMetadata> entities = declarations.createOrReplace();
 
@@ -455,7 +459,7 @@ public class KubernetesAssistant {
             });
     }
 
-    private List<Pod> getPods(String label) {
+    public List<Pod> getPods(String label) {
         return this.client
             .pods()
             .inNamespace(this.namespace)

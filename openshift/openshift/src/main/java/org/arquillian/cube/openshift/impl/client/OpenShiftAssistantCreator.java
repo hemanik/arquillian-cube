@@ -11,7 +11,7 @@ public class OpenShiftAssistantCreator {
     @ApplicationScoped
     private InstanceProducer<OpenShiftAssistant> openShiftAssistantInstanceProducer;
 
-    public void createOpenShiftAssistant(@Observes OpenShiftClient openShiftClient) {
+    public void createOpenShiftAssistant(@Observes OpenShiftClient openShiftClient) throws NoSuchMethodException {
         OpenShiftAssistant openShiftAssistant = new OpenShiftAssistant(openShiftClient.getClientExt(), openShiftClient.getNamespace());
         openShiftAssistantInstanceProducer.set(openShiftAssistant);
     }

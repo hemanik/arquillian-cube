@@ -12,7 +12,7 @@ public class KubernetesAssistantCreator {
     @ApplicationScoped
     private InstanceProducer<KubernetesAssistant> kubernetesAssistantInstanceProducer;
 
-    public void createKubernetesAssistant(@Observes KubernetesClient kubernetesClient) throws IllegalAccessException, InstantiationException {
+    public void createKubernetesAssistant(@Observes KubernetesClient kubernetesClient) throws IllegalAccessException, InstantiationException, NoSuchMethodException {
         KubernetesAssistant kubernetesAssistant = new KubernetesAssistant(kubernetesClient, kubernetesClient.getNamespace());
         kubernetesAssistantInstanceProducer.set(kubernetesAssistant);
     }

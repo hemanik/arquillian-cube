@@ -1,7 +1,9 @@
 package org.arquillian.cube.openshift.impl.enricher.external;
 
+import io.fabric8.kubernetes.clnt.v3_1.KubernetesClient;
 import java.lang.annotation.Annotation;
 import org.arquillian.cube.openshift.impl.client.OpenShiftAssistant;
+import org.arquillian.cube.openshift.impl.client.OpenShiftClient;
 import org.jboss.arquillian.core.api.Instance;
 import org.jboss.arquillian.core.api.annotation.Inject;
 import org.jboss.arquillian.test.api.ArquillianResource;
@@ -14,7 +16,7 @@ public class OpenShiftAssistantResourceProvider implements ResourceProvider {
 
     @Override
     public boolean canProvide(Class<?> type) {
-        return OpenShiftAssistant.class.isAssignableFrom(type);
+        return OpenShiftAssistant.class.getName().equals(type.getName());
     }
 
     @Override
@@ -22,7 +24,7 @@ public class OpenShiftAssistantResourceProvider implements ResourceProvider {
         OpenShiftAssistant openShiftAssistant = this.openShiftAssistantInstance.get();
 
         if (openShiftAssistant == null) {
-            throw new IllegalStateException("Unable to inject DockerClient into test.");
+            throw new IllegalStateException("Unable to inject OpenshiftAssistant into test.");
         }
 
         return openShiftAssistant;

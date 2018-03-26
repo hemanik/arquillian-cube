@@ -84,7 +84,7 @@
     <version.arquillian.reporter>0.0.3</version.arquillian.reporter>
     <version.restassured>3.0.6</version.restassured>
     <version.jgit>4.9.2.201712150930-r</version.jgit>
-    <version.systemrules>1.17.0</version.systemrules>
+    <version.systemrules>1.17.1</version.systemrules>
     <version.dmr>1.2.0.Final</version.dmr>
     <version.jackson>2.6.3</version.jackson>
     <version.ok-http-client>3.8.0</version.ok-http-client>
